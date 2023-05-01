@@ -1,0 +1,4 @@
+FILE=/usr/local/bin/prxy
+if [ ! -f "$FILE" ]; then
+	ln -s /usr/local/bin/proxy-switch $FILE
+fi

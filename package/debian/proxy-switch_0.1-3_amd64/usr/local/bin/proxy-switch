@@ -1,0 +1,202 @@
+#!/bin/bash
+
+# proxy-switch [prxy]: A simple bash script to manage system-wide proxy setting in a debian system
+# Author: Khashayar Aryanmehr <khashayar.aryanmehr@live.com>
+
+# MIT License
+
+# Copyright (c) 2023 xerxesar
+
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+
+# read first arg as the command[CMD]
+CMD=$1
+if [[ $CMD != -* ]]
+then
+	shift 1
+else
+	CMD=""
+fi
+while [ True ]; do
+        if [[ "$1" == "--http" ]]
+	then
+                ARGS_http=$2
+                shift 2
+        elif [[ "$1" == "--https" ]]
+	then
+                ARGS_https=$2
+                shift 2
+        elif [[ "$1" == "--ftp" ]]
+	then
+                ARGS_ftp=$2
+                shift 2
+        elif [[ "$1" == "--help" || "$1" == "-h" ]]
+	then
+                ARGS_help=true
+                shift 1
+        else
+                break
+        fi
+done
+# set https and ftp and socks to http if they are not set
+ARGS_https="${ARGS_https:=$ARGS_http}"
+ARGS_ftp="${ARGS_ftp:=$ARGS_http}"
+ARGS_socks="${ARGS_socks:=$ARGS_http}"
+
+showHelp () {
+        echo "Usage: 
+                proxy-switch <command> [options]
+                A simple bash script to manage system-wide proxy setting in a debian system
+
+                Commands:
+                  on            Set system proxy mode to 'manual'.
+                  off           Set system proxy mode to 'none'.
+                  toggle        Toggle between 'on' and 'off' modes.
+                  set           Set proxy settings (look below for set options).
+                  unset         Unset proxy env variables.
+                  clear         Unset and clear saved proxy settings.
+                  help          Show this help text.
+
+                Options:
+                  --http, --https, --ftp, --socks       These can be used to set proxy settings in combination with 'set' Command. Unspecifide options will be defaulted to http option value.
+                  --help, -h                            Show this help text.
+
+                Examples:
+                  proxy-switch set --http localhost:8880 --socks localhost:1080
+                  proxy-switch toggle
+                  proxy-switch unset
+        "
+}
+
+removeExistingBashrcConf () {
+        # Remove the init command from .bashrc
+        sed -i '/source\ prxy\ init/d' ~/.bashrc
+}
+writeBashrcConf () {
+        # Write the init command to .bashrc so new shells have their env vars set
+        echo "source prxy init" >> ~/.bashrc
+}
+applyConf () {
+        echo "Applying prxy config from ~/.proxy-switch/.saved.env"
+        set -a
+        source ~/.proxy-switch/.saved.env
+        set +x
+}
+saveConf () {
+# save env var values for later toggles
+        mkdir -p ~/.proxy-switch
+        CONF_TMP="
+export http_proxy=$ARGS_http
+export https_proxy=$ARGS_https
+export ftp_proxy=$ARGS_ftp
+export socks_proxy=$ARGS_socks
+export no_proxy=localhost,127.0.0.1
+export HTTP_PROXY=$ARGS_http
+export HTTPS_PROXY=$ARGS_https
+export FTP_PROXY=$ARGS_ftp
+export SOCKS_PTOXY=$ARGS_socks
+export NO_PROXY=localhost,127.0.0.1"
+        echo "$CONF_TMP" > ~/.proxy-switch/.saved.env
+        removeExistingBashrcConf
+        writeBashrcConf
+}
+clearConf () {
+        echo "" > ~/.proxy-switch/.saved.env
+}
+unsetProxy () {
+        unset http_proxy
+        unset http_proxy
+        unset https_proxy
+        unset ftp_proxy
+        unset socks_proxy
+        unset no_proxy
+        unset HTTP_PROXY
+        unset HTTPS_PROXY
+        unset FTP_PROXY
+        unset SOCKS_PROXY
+        unset NO_PROXY
+}
+toggleProxy () {
+        MODE="$(gsettings get org.gnome.system.proxy mode)"
+        if [[ $MODE =~ "none" ]]
+        then
+                gsettings set org.gnome.system.proxy mode 'manual'
+                applyConf
+                notify-send -i "info" 'Proxy toggled' 'Turned On'
+        elif [[ $MODE =~ "manual" ]]
+        then
+                gsettings set org.gnome.system.proxy mode 'none'
+                unsetProxy
+                notify-send -i "info" 'Proxy toggled' 'Turned Off'
+        fi
+}
+init () {
+        MODE="$(gsettings get org.gnome.system.proxy mode)"
+        if [[ $MODE =~ "none" ]]
+        then
+                unsetProxy
+                notify-send -i "info" 'Proxy State' 'Off'
+        elif [[ $MODE =~ "manual" ]]
+        then
+                applyConf
+                notify-send -i "info" 'Proxy State' 'On'
+        fi
+}
+
+# Match command [$CMD]
+if [[ $CMD == "help" || "$ARGS_help" = true ]]
+then
+        showHelp
+elif [[ $CMD == "on" ]]
+then
+        # set gnome system proxy mode to 'manual' and apply saved env variables
+        gsettings set org.gnome.system.proxy mode 'manual'
+        applyConf
+elif [[ $CMD == "off" ]]
+then
+        # set gnome system proxy mode to 'none'
+        gsettings set org.gnome.system.proxy mode 'none'
+elif [[ $CMD == "toggle" || $CMD == "t" ]]
+then
+        # toggle gnome system proxy mode between 'none' and 'manual'
+        toggleProxy
+elif [[ $CMD == "init" ]]
+then
+        # initialize env vars on new shells
+        init
+elif [[ $CMD == "set" ]]
+then
+        # save and apply the newly provided config [--http,--https,--ftp,--socks]
+        # and set gnome proxy mode to 'manual'
+        # this also writes the config to ~/.bashrc
+        saveConf
+        applyConf
+        gsettings set org.gnome.system.proxy mode 'manual'
+elif [[ $CMD == "unset" ]]
+then
+        # unset env variables and set gnome proxy mode to 'none'
+        unsetProxy
+        gsettings set org.gnome.system.proxy mode 'none'
+elif [[ $CMD == "clear" ]]
+then
+        # remove config from .saved.env
+        clearConf
+fi
+
