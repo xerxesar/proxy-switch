@@ -1,5 +1,5 @@
 Package: proxy-switch
-Version: 0.1
+Version: 0.2
 Maintainer: Khashayar Aryanmehr
 Architecture: amd64
 Description: A simple bash script to manage system-wide http/https/ftp/socks proxy settings

@@ -2,7 +2,7 @@
 parent_path=$( cd "$(dirname "${BASH_SOURCE[0]}")" ; pwd -P )
 cd "$parent_path"
 # create debian package
-DEBIAN_VERSION="0.1-3"
+DEBIAN_VERSION="0.2-1"
 PKG_PATH="./proxy-switch_${DEBIAN_VERSION}_amd64"
 mkdir -p $PKG_PATH/DEBIAN
 cp ./control ./postinst $PKG_PATH/DEBIAN/

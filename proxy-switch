@@ -87,17 +87,23 @@ showHelp () {
 
 removeExistingBashrcConf () {
         # Remove the init command from .bashrc
-        sed -i '/source\ prxy\ init/d' ~/.bashrc
+        sed -i '/source\ proxy-switch\ init/d' ~/.bashrc
 }
 writeBashrcConf () {
         # Write the init command to .bashrc so new shells have their env vars set
-        echo "source prxy init" >> ~/.bashrc
+        echo "source proxy-switch init" >> ~/.bashrc
+}
+updateBashrcConf () {
+        removeExistingBashrcConf
+        writeBashrcConf
 }
 applyConf () {
+	mkdir -p ~/.proxy-switch
+	touch ~/.proxy-switch/.saved.env
         echo "Applying prxy config from ~/.proxy-switch/.saved.env"
         set -a
         source ~/.proxy-switch/.saved.env
-        set +x
+        set +a
 }
 saveConf () {
 # save env var values for later toggles
@@ -113,11 +119,30 @@ export HTTPS_PROXY=$ARGS_https
 export FTP_PROXY=$ARGS_ftp
 export SOCKS_PTOXY=$ARGS_socks
 export NO_PROXY=localhost,127.0.0.1"
+	touch ~/.proxy-switch/.saved.env
         echo "$CONF_TMP" > ~/.proxy-switch/.saved.env
-        removeExistingBashrcConf
-        writeBashrcConf
+}
+saveProxyMode () {
+	echo "saving proxy-mode ..."
+        mkdir -p ~/.proxy-switch
+	touch ~/.proxy-switch/.saved.proxymode.env
+        echo "export PROXY_MODE=$1" > ~/.proxy-switch/.saved.proxymode.env
+}
+applySavedProxyMode () {
+        mkdir -p ~/.proxy-switch
+	touch ~/.proxy-switch/.saved.proxymode.env
+	echo $PROXY_MODE
+	cat ~/.proxy-switch/.saved.proxymode.env
+        set -a
+        source ~/.proxy-switch/.saved.proxymode.env
+        set +a
+	echo $PROXY_MODE
+	echo ":)))"
+
 }
 clearConf () {
+        mkdir -p ~/.proxy-switch
+	touch ~/.proxy-switch/.saved.env
         echo "" > ~/.proxy-switch/.saved.env
 }
 unsetProxy () {
@@ -134,32 +159,37 @@ unsetProxy () {
         unset NO_PROXY
 }
 toggleProxy () {
-        MODE="$(gsettings get org.gnome.system.proxy mode)"
-        if [[ $MODE =~ "none" ]]
+        if [[ $PROXY_MODE =~ "none" ]]
         then
                 gsettings set org.gnome.system.proxy mode 'manual'
+                saveProxyMode 'manual'
+                applySavedProxyMode
                 applyConf
                 notify-send -i "info" 'Proxy toggled' 'Turned On'
-        elif [[ $MODE =~ "manual" ]]
+        elif [[ $PROXY_MODE =~ "manual" ]]
         then
                 gsettings set org.gnome.system.proxy mode 'none'
+                saveProxyMode 'none'
+                applySavedProxyMode
                 unsetProxy
                 notify-send -i "info" 'Proxy toggled' 'Turned Off'
         fi
 }
 init () {
-        MODE="$(gsettings get org.gnome.system.proxy mode)"
-        if [[ $MODE =~ "none" ]]
+#	applySavedProxyMode
+	echo $PROXY_MODE
+        if [[ $PROXY_MODE =~ "none" ]]
         then
                 unsetProxy
                 notify-send -i "info" 'Proxy State' 'Off'
-        elif [[ $MODE =~ "manual" ]]
+        elif [[ $PROXY_MODE =~ "manual" ]]
         then
                 applyConf
                 notify-send -i "info" 'Proxy State' 'On'
         fi
 }
 
+applySavedProxyMode
 # Match command [$CMD]
 if [[ $CMD == "help" || "$ARGS_help" = true ]]
 then
@@ -168,11 +198,15 @@ elif [[ $CMD == "on" ]]
 then
         # set gnome system proxy mode to 'manual' and apply saved env variables
         gsettings set org.gnome.system.proxy mode 'manual'
+        saveProxyMode 'manual'
+        applySavedProxyMode
         applyConf
 elif [[ $CMD == "off" ]]
 then
         # set gnome system proxy mode to 'none'
         gsettings set org.gnome.system.proxy mode 'none'
+        saveProxyMode 'none'
+        applySavedProxyMode
 elif [[ $CMD == "toggle" || $CMD == "t" ]]
 then
         # toggle gnome system proxy mode between 'none' and 'manual'
@@ -188,15 +222,21 @@ then
         # this also writes the config to ~/.bashrc
         saveConf
         applyConf
+        saveProxyMode 'manual'
+        applySavedProxyMode
         gsettings set org.gnome.system.proxy mode 'manual'
 elif [[ $CMD == "unset" ]]
 then
         # unset env variables and set gnome proxy mode to 'none'
         unsetProxy
+        saveProxyMode 'none'
+        applySavedProxyMode
         gsettings set org.gnome.system.proxy mode 'none'
 elif [[ $CMD == "clear" ]]
 then
         # remove config from .saved.env
+        saveProxyMode 'none'
+        applySavedProxyMode
         clearConf
 fi
 
